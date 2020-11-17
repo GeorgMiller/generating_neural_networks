@@ -40,10 +40,10 @@ class Hypernetwork(keras.Model):
 
         x = self.dense_1(inputs)
         x = self.dense_2(x)
-        print(x.shape)
+        #print(x.shape)
 
         input_w1 = x[:,:index_1]
-        print("input_w1", input_w1)
+        #print("input_w1", input_w1)
         input_w1 = tf.reshape(input_w1,(32,-1))
 
 
@@ -58,7 +58,7 @@ class Hypernetwork(keras.Model):
             output = tf.concat([output,w1[1]], 0)
             
         input_w2 = x[:,index_1:index_2]
-        print("input_w2", input_w2)
+        #print("input_w2", input_w2)
         input_w2 = tf.reshape(input_w1,(16,-1))
         
         for step in range(layer_2):
@@ -70,7 +70,7 @@ class Hypernetwork(keras.Model):
             output = tf.concat([output,w2[1]], 0)
 
         input_w3 = x[:,index_2:index_3]
-        print("input_w3", input_w3)
+        #print("input_w3", input_w3)
         input_w3 = tf.reshape(input_w3,(8,-1))
 
         for step in range(layer_3):
@@ -82,7 +82,7 @@ class Hypernetwork(keras.Model):
             output = tf.concat([output,w3[1]], 0)
 
         input_w4 = x[:,index_3:index_4]
-        print("input_w4", input_w4)
+        #print("input_w4", input_w4)
         input_w4 = tf.reshape(input_w4,(1,-1))
 
         for step in range(layer_4):
@@ -93,10 +93,7 @@ class Hypernetwork(keras.Model):
             w4 = self.w4_dense_2(w4)
             output = tf.concat([output,w4[1]], 0)
 
+        #z = np.random.uniform(low = -1, high = 1, size = 5070)
+        #output = tf.concat([output,z],0)
+
         return output
-
-    def compute_gradients(self,x):
-
-        with tf.GradientTape() as tape:
-            loss = x
-        return tape.gradient(loss, self.trainable_variables)
