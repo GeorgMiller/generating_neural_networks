@@ -190,7 +190,7 @@ def start():
         action = choose_action(up_probability)
 
         # Implement the chosen action. Get back the details from the enviroment after performing the action
-        observation_image, reward, done, info = env.step(action)
+        observation_image, reward, done, info = env.step(2)
 
         reward_sum += reward
         episode_rewards.append(reward)

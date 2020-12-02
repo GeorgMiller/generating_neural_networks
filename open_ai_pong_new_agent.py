@@ -80,12 +80,12 @@ def relu(vector):
 
 def apply_neural_nets(observation_matrix, weights):
     """ Based on the observation_matrix and weights, compute the new hidden layer values and the new output layer values"""
-    print("these are the input which are important", observation_matrix.shape , weights['1'].shape, weights['2'].shape)
+    #print("these are the input which are important", observation_matrix.shape , weights['1'].shape, weights['2'].shape)
     hidden_layer_values = np.dot(weights['1'], observation_matrix)
     hidden_layer_values = relu(hidden_layer_values)
     output_layer_values = np.dot(hidden_layer_values, weights['2'])
     output_layer_values = sigmoid(output_layer_values)
-    print("these are also important values", hidden_layer_values.shape, output_layer_values)
+    #print("these are also important values", hidden_layer_values.shape, output_layer_values)
     return hidden_layer_values, output_layer_values
 
 def neural_net():
@@ -95,12 +95,18 @@ def neural_net():
     model.add(Conv2D(32, (9, 9), strides=(4, 4), padding='same', activation='relu'))
     model.add(Flatten())
     model.add(Dense(16, activation='relu'))
-    model.add(Dense(1, activation='softmax'))
+    model.add(Dense(1, activation='linear'))
     opt = Adam(lr=0.001)
     model.compile(loss='categorical_crossentropy', optimizer=opt)
     model.summary()
+    print(model.layers[1].kernel, model.layers[3].kernel)
+    model.layers[1].kernel = np.reshape(np.random.normal(loc=0,scale=0.01, size = 207360),(9,9,80,32)).astype('float32')
+    model.layers[3].kernel = np.reshape(np.random.normal(loc=0, scale=0.01,size=10240),(640,16)).astype('float32')
+    model.layers[4].kernel = np.reshape(np.random.normal(loc=0, scale=0.01,size=16),(16,1)).astype('float32')
+    #print(model.trainable_weights.shape)
+    
+    return model
 
-neural_net()
 
 def choose_action(probability):
     random_value = np.random.uniform()
@@ -164,13 +170,15 @@ def main():
     decay_rate = 0.99
     num_hidden_layer_neurons = 200
     input_dimensions = 80 * 80
-    learning_rate = 1e-4
+    learning_rate = 0.001
 
     episode_number = 0
     reward_sum = 0
     running_reward = None
     prev_processed_observations = None
 
+    #weights = np.random.normal(loc=0,scale=0.01, size = weight_space)
+    '''
     weights = {
         '1': np.random.randn(num_hidden_layer_neurons, input_dimensions) / np.sqrt(input_dimensions),
         '2': np.random.randn(num_hidden_layer_neurons) / np.sqrt(num_hidden_layer_neurons)
@@ -182,63 +190,102 @@ def main():
     for layer_name in weights.keys():
         expectation_g_squared[layer_name] = np.zeros_like(weights[layer_name])
         g_dict[layer_name] = np.zeros_like(weights[layer_name])
-
+    '''
     episode_hidden_layer_values, episode_observations, episode_gradient_log_ps, episode_rewards = [], [], [], []
 
+    model = neural_net()
+    optimizer = tf.keras.optimizers.Adam(1e-3) 
 
     while True:
         env.render()
-        processed_observations, prev_processed_observations = preprocess_observations(observation, prev_processed_observations, input_dimensions)
-        hidden_layer_values, up_probability = apply_neural_nets(processed_observations, weights)
-    
-        episode_observations.append(processed_observations)
-        episode_hidden_layer_values.append(hidden_layer_values)
 
-        action = choose_action(up_probability)
+        with tf.GradientTape() as tape:
 
-        # carry out the chosen action
-        observation, reward, done, info = env.step(action)
+            processed_observations, prev_processed_observations = preprocess_observations(observation, prev_processed_observations, input_dimensions)
 
-        reward_sum += reward
-        episode_rewards.append(reward)
+            #print(processed_observations.shape, processed_observations)
+            #hidden_layer_values, up_probability = apply_neural_nets(processed_observations, weights)
 
-        # see here: http://cs231n.github.io/neural-networks-2/#losses
-        fake_label = 1 if action == 2 else 0
-        loss_function_gradient = fake_label - up_probability
-        episode_gradient_log_ps.append(loss_function_gradient)
+            episode_observations.append(processed_observations)
+            #print(sum(processed_observations))
+            up_probability = model(processed_observations.reshape([1,6400]))
+            scaling = tf.convert_to_tensor(0.5)
+            up_probability = tf.math.add(up_probability,scaling)
+            #print(up_probability)
+            
+            #up_probability = (( model.predict((processed_observations.reshape([1,6400])),batch_size=1).flatten() ))
+            #print(up_probability.numpy())
+            #model.predict(processed_observations.reshape([1,processed_observations.shape[0]]), batch_size=1).flatten()))
+            
+            #episode_hidden_layer_values.append(model.layers[1].variables)
+
+            #print(episode_hidden_layer_values)
+            #episode_hidden_layer_values.append(hidden_layer_values)
+
+            action = choose_action(up_probability[0].numpy())
+
+            # carry out the chosen action
+            observation, cookie, done, info = env.step(action)
+            #print(reward)
+
+            reward_sum += cookie 
+            episode_rewards.append(cookie)
+
+            # see here: http://cs231n.github.io/neural-networks-2/#losses
+            fake_label = 1 if action == 2 else 0
+            loss_function_gradient = tf.math.subtract(tf.convert_to_tensor(fake_label, dtype='float32'), up_probability)
+            episode_gradient_log_ps.append(loss_function_gradient[0].numpy())
 
 
-        if done: # an episode finished
-            episode_number += 1
-
-            # Combine the following values for the episode
-            episode_hidden_layer_values = np.vstack(episode_hidden_layer_values)
-            episode_observations = np.vstack(episode_observations)
-            episode_gradient_log_ps = np.vstack(episode_gradient_log_ps)
-            episode_rewards = np.vstack(episode_rewards)
-
-            # Tweak the gradient of the log_ps based on the discounted rewards
-            episode_gradient_log_ps_discounted = discount_with_rewards(episode_gradient_log_ps, episode_rewards, gamma)
-
-            gradient = compute_gradient(
-              episode_gradient_log_ps_discounted,
-              episode_hidden_layer_values,
-              episode_observations,
-              weights
-            )
+            if done: # an episode finished
+                print(reward_sum)
+                episode_number += 1
+                #print(up_probability)
+                # Combine the following values for the episode
+                #episode_hidden_layer_values = np.vstack(episode_hidden_layer_values)
+                episode_observations = np.vstack(episode_observations)
+                #episode_gradient_log_ps = np.vstack(episode_gradient_log_ps)
+                #tf.stack(episode_rewards)
+                episode_rewards = np.vstack(episode_rewards)
+                #masks = tf.one_hot(action_sample, num_actions)
+                # Tweak the gradient of the log_ps based on the discounted rewards
+                episode_gradient_log_ps_discounted = discount_with_rewards(episode_gradient_log_ps, episode_rewards, gamma)
+                #episode_gradient_log_ps_discounted
+                loss = tf.math.multiply(tf.convert_to_tensor(episode_rewards, dtype='float32'),loss_function_gradient)
+                print(episode_rewards[15:])
+                print("this is the loss", loss.shape)
+                grads = tape.gradient(loss, model.trainable_weights)
+                #print(grads)
+                optimizer.apply_gradients(zip(grads, model.trainable_weights))
+                '''
+                gradient = compute_gradient(
+                episode_gradient_log_ps_discounted,
+                episode_hidden_layer_values,
+                episode_observations,
+                weights
+                )
+                '''
+                
 
             # Sum the gradient for use when we hit the batch size
-            for layer_name in gradient:
-                g_dict[layer_name] += gradient[layer_name]
+            #print("gradients",gradient['1'].shape,gradient['2'].shape)
 
-            if episode_number % batch_size == 0:
-                update_weights(weights, expectation_g_squared, g_dict, decay_rate, learning_rate)
+            #print("dictionaries", g_dict['1'].shape,g_dict['2'].shape)
 
-            episode_hidden_layer_values, episode_observations, episode_gradient_log_ps, episode_rewards = [], [], [], [] # reset values
-            observation = env.reset() # reset env
-            running_reward = reward_sum if running_reward is None else running_reward * 0.99 + reward_sum * 0.01
-            print('resetting env. episode reward total was %f. running mean: %f' % (reward_sum, running_reward))
-            reward_sum = 0
-            prev_processed_observations = None
+            #print("weights of the model", model.layers[1].weights, model.layers[3].weights)
+
+            #for layer_name in gradient:
+                #print(g_dict[layer_name],gradient[layer_name])
+             #   g_dict[layer_name] += gradient[layer_name]
+
+            #if episode_number % batch_size == 0:
+            #    update_weights(weights, expectation_g_squared, g_dict, decay_rate, learning_rate)
+
+                episode_hidden_layer_values, episode_observations, episode_gradient_log_ps, episode_rewards = [], [], [], [] # reset values
+                observation = env.reset() # reset env
+                running_reward = reward_sum if running_reward is None else running_reward * 0.99 + reward_sum * 0.01
+                print('resetting env. episode reward total was %f. running mean: %f' % (reward_sum, running_reward))
+                reward_sum = 0
+                prev_processed_observations = None
 
 main()

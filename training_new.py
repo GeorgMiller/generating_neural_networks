@@ -118,7 +118,7 @@ def set_parameters(mnist_model, weights_pred):
 
     mnist_model.layers[6].kernel = kernel_4
     mnist_model.layers[6].bias = b_4
-
+    
        
 
 
@@ -203,6 +203,7 @@ for step in range(1, 6001):
     '''     
     if step % 100 == 0:
       var = generated_parameters.numpy()
+      print(y,preds)
       print('statistics of the generated parameters: '+'Mean, {:2.3f}, var {:2.3f}, min {:2.3f}, max {:2.3f}'.format(var.mean(), var.var(), var.min(), var.max()))
       print('\n Step: {}, validation set accuracy: {:2.2f}     loss: {:2.2f}'.format(step, float(train_acc_metric.result()), loss_accum))
       loss_accum = 0.0
